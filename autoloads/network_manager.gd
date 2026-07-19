@@ -31,7 +31,7 @@ var multiplayer_peer := ENetMultiplayerPeer.new()
 
 var udp_broadcaster := PacketPeerUDP.new()
 var broadcast_timer: Timer
-var _host_display_name: String = "Server"
+var _host_display_name: String = "Dedicated Server"
 
 var current_ping: int = 0
 var ping_label: Label
@@ -63,6 +63,17 @@ var _pending_handshake: Dictionary = {}
 
 const ADMIN_LIST_PATH := "user://server_admins.cfg"
 const BAN_LIST_PATH := "user://bans.cfg"
+## Dedicated-server-only config, plain "key=value" lines (comments start with #).
+## Just "name" for now — read once at auto-host time in _ready(), so a change
+## needs a restart to take effect, same as ADMIN_LIST_PATH/BAN_LIST_PATH.
+##
+## Deliberately NOT under user:// like the two paths above: this one is meant to
+## be hand-edited by whoever's running the dedicated server, right next to the
+## binary they downloaded — not buried in a per-OS AppData folder they'd have to
+## go hunting for. _server_properties_path() resolves it relative to the running
+## executable instead of a fixed constant.
+func _server_properties_path() -> String:
+	return OS.get_executable_path().get_base_dir().path_join("server.properties")
 
 ## Dedicated-server admins, by persistent client_uuid (see PlayerManager). The
 ## host (peer_id 1) is always implicitly an admin in a player-hosted game — this
@@ -103,7 +114,16 @@ func _ready() -> void:
 	_load_bans()
 
 	if OS.has_feature("headless"):
-		host_game() # Auto-host on startup!
+		var props := _load_server_properties()
+		if host_game(DEFAULT_PORT, props.get("name", "Server")): # Auto-host on startup!
+			# Node-targeted RPCs (ChatUI, MatchState, LevelSpawner — anything living
+			# under Lobby.tscn) are resolved by scene tree PATH on the receiving
+			# side. Clients get there via server_browser.gd's Create/Join handlers
+			# changing scene; the headless auto-host path skipped that entirely,
+			# so the server had no Lobby/ChatUI/etc. node for those RPCs to find.
+			# Deferred: called from _ready(), before the engine's own initial-scene
+			# setup finishes — changing scene immediately here would race it.
+			get_tree().call_deferred("change_scene_to_file", "res://scenes/lobby.tscn")
 
 ## Safe to call from anywhere, anytime — unlike multiplayer.is_server()/
 ## get_unique_id(), which both error loudly if the underlying ENetMultiplayerPeer
@@ -171,6 +191,8 @@ func _ping_response(client_time: int):
 	current_ping = Time.get_ticks_msec() - client_time
 
 func host_game(port: int = DEFAULT_PORT, host_name: String = "Server") -> bool:
+	print("Starting Server")
+	PlayerManager.reset_session_state()
 	_host_display_name = host_name
 	multiplayer_peer = ENetMultiplayerPeer.new() # MUST create a new peer to prevent reuse errors!
 	var error = multiplayer_peer.create_server(port, MAX_PLAYERS)
@@ -178,7 +200,6 @@ func host_game(port: int = DEFAULT_PORT, host_name: String = "Server") -> bool:
 		printerr("Cannot host server: ", error)
 		return false
 	multiplayer.multiplayer_peer = multiplayer_peer
-	print("Hosting started on port ", port)
 	state = ConnectionState.CONNECTED  # the host never handshakes with itself
 
 	# Start LAN UDP Broadcasting
@@ -190,17 +211,21 @@ func host_game(port: int = DEFAULT_PORT, host_name: String = "Server") -> bool:
 	broadcast_timer.autostart = true
 	broadcast_timer.timeout.connect(_on_broadcast_timer)
 	add_child(broadcast_timer)
-
+	print("Hosting on ", IP.get_local_addresses()[0], ":", port)
 	return true
 
 func _on_broadcast_timer():
 	if not multiplayer.is_server(): return
-	udp_broadcaster.put_packet((_host_display_name + "'s Room").to_utf8_buffer())
+	if OS.has_feature("headless"):
+		udp_broadcaster.put_packet(_host_display_name.to_utf8_buffer())
+	else:
+		udp_broadcaster.put_packet((_host_display_name + "'s Room").to_utf8_buffer())
 
 ## User-facing entry point: resets reconnect bookkeeping and remembers the address
 ## for any future automatic reconnect attempts. Internal retries call _connect_to()
 ## directly instead, so they don't reset _reconnect_attempts.
 func join_game(address: String = DEFAULT_SERVER_IP, port: int = DEFAULT_PORT) -> bool:
+	PlayerManager.reset_session_state()
 	_last_join_address = address
 	_last_join_port = port
 	_reconnect_attempts = 0
@@ -355,6 +380,14 @@ func kick_peer(peer_id: int, reason: String, requested_by: int) -> bool:
 	_send_kicked.rpc_id(peer_id, reason)
 	await get_tree().create_timer(0.3).timeout
 	if multiplayer_peer is ENetMultiplayerPeer:
+		# now=true (immediate/forced disconnect) was tried here to close the
+		# rejoin race described below, but it doesn't reliably fire
+		# peer_disconnected at all — multiplayer.get_peers() can keep reporting
+		# the kicked id forever, which breaks VOIP (and anything else iterating
+		# connected peers) permanently instead of just narrowing a rare race.
+		# A graceful disconnect (still) leaves the reconnect-during-teardown
+		# race PlayerManager._dedupe_name() guards against, but that's a much
+		# smaller cost than a zombie peer_id that never gets cleaned up.
 		multiplayer_peer.disconnect_peer(peer_id)
 	return true
 
@@ -389,6 +422,16 @@ func unban_ip(ip: String):
 	if _banned_ips.erase(ip):
 		_save_bans()
 
+## Snapshots for a ban-management UI. Server-authoritative data (this dictionary
+## is only ever populated on the machine actually running as server), so this is
+## meaningless to call from a plain client — same assumption BanListPanel makes
+## by only showing its button to the host.
+func get_banned_uuids() -> Array:
+	return _banned_uuids.keys()
+
+func get_banned_ips() -> Array:
+	return _banned_ips.keys()
+
 ## "" if peer_id isn't currently connected or we're not using ENet.
 func get_peer_ip(peer_id: int) -> String:
 	if multiplayer_peer is ENetMultiplayerPeer:
@@ -400,6 +443,9 @@ func get_peer_ip(peer_id: int) -> String:
 ## Remote entry point: any connected client can call this (e.g. Lobby's Kick
 ## button), targeting the server — kick_peer() re-checks is_admin() itself, so a
 ## non-admin calling this directly (bypassing the UI gate) is still refused.
+## The host does NOT go through this RPC: Godot refuses a "call_remote" RPC
+## targeting your own peer id outright (ERR_INVALID_PARAMETER), so the host calls
+## kick_peer()/ban_peer() directly instead — see AdminPanel's kick/ban handlers.
 @rpc("any_peer", "call_remote", "reliable")
 func _request_kick(peer_id: int, reason: String):
 	if not multiplayer.is_server():
@@ -427,6 +473,36 @@ func _load_admin_uuids():
 	var cfg := ConfigFile.new()
 	if cfg.load(ADMIN_LIST_PATH) == OK:
 		admin_uuids = cfg.get_value("admins", "uuids", [])
+
+## Plain "key=value" lines rather than ConfigFile's [section] format — a
+## dedicated-server admin editing one "name=" line shouldn't need to know Godot's
+## config syntax. Creates a starter file with the default commented in if none
+## exists yet, same first-run experience as ADMIN_LIST_PATH/BAN_LIST_PATH.
+func _load_server_properties() -> Dictionary:
+	var path := _server_properties_path()
+	if not FileAccess.file_exists(path):
+		_write_default_server_properties(path)
+	var props := {}
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return props
+	while not file.eof_reached():
+		var line := file.get_line().strip_edges()
+		if line.is_empty() or line.begins_with("#"):
+			continue
+		var eq := line.find("=")
+		if eq == -1:
+			continue
+		props[line.substr(0, eq).strip_edges()] = line.substr(eq + 1).strip_edges()
+	return props
+
+func _write_default_server_properties(path: String):
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		push_warning("NetworkManager: failed to create default server.properties at %s (error %d)" % [path, FileAccess.get_open_error()])
+		return
+	file.store_line("# Dedicated server config. Edit, then restart the server to apply.")
+	file.store_line("name=Server")
 
 func _load_bans():
 	_banned_uuids.clear()

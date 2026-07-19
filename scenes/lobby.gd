@@ -12,6 +12,8 @@ extends Control
 @export var player_list: ItemList
 @export var voice_panel: VoicePanel
 @export var admin_panel: AdminPanel
+@export var manage_bans_button: Button
+@export var ban_list_panel: BanListPanel
 @export var match_state: MatchState
 @export var settings_button: Button
 @export var settings_menu: Control
@@ -90,6 +92,9 @@ func _ready():
 	if _is_host:
 		if status_label: status_label.text = tr("STATUS_HOSTING")
 		if ready_button: ready_button.text = tr("START_GAME")
+		if manage_bans_button and ban_list_panel:
+			manage_bans_button.visible = true
+			manage_bans_button.pressed.connect(ban_list_panel.open)
 	else:
 		if status_label: status_label.text = tr("STATUS_CONNECTED")
 		if ready_button: ready_button.text = tr("READY_UP")

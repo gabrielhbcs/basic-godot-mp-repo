@@ -5,8 +5,9 @@
 [ext_resource type="Script" path="res://scenes/voice_panel.gd" id="4_voice_panel"]
 [ext_resource type="Script" path="res://scenes/admin_panel.gd" id="5_admin_panel"]
 [ext_resource type="Script" path="res://session/match_state.gd" id="6_match_state"]
+[ext_resource type="PackedScene" uid="uid://dwd7itrswt5bf" path="res://scenes/ban_list_panel.tscn" id="7_ban_list"]
 
-[node name="Lobby" type="Control" node_paths=PackedStringArray("status_label", "mic_button", "mic_volume_bar", "player_list", "voice_panel", "admin_panel", "match_state", "ready_button", "leave_button", "settings_button", "settings_menu", "lobby_ui", "game_container", "level_spawner")]
+[node name="Lobby" type="Control" node_paths=PackedStringArray("status_label", "mic_button", "mic_volume_bar", "player_list", "voice_panel", "admin_panel", "manage_bans_button", "ban_list_panel", "match_state", "ready_button", "leave_button", "settings_button", "settings_menu", "lobby_ui", "game_container", "level_spawner")]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -20,6 +21,8 @@ mic_volume_bar = NodePath("VBoxContainer/MicVolumeBar")
 player_list = NodePath("VBoxContainer/PlayerList")
 voice_panel = NodePath("VBoxContainer/PeerVoiceControls")
 admin_panel = NodePath("VBoxContainer/AdminControls")
+manage_bans_button = NodePath("VBoxContainer/ManageBansButton")
+ban_list_panel = NodePath("BanListPanel")
 match_state = NodePath("MatchState")
 ready_button = NodePath("VBoxContainer/ReadyButton")
 leave_button = NodePath("VBoxContainer/LeaveButton")
@@ -106,6 +109,11 @@ layout_mode = 2
 disabled = true
 text = "BAN_SELECTED"
 
+[node name="ManageBansButton" type="Button" parent="VBoxContainer"]
+visible = false
+layout_mode = 2
+text = "MANAGE_BANS"
+
 [node name="ChatUI" parent="VBoxContainer" instance=ExtResource("2_chat")]
 layout_mode = 2
 
@@ -127,6 +135,9 @@ text = "SETTINGS_BUTTON"
 script = ExtResource("6_match_state")
 
 [node name="SettingsMenu" parent="." instance=ExtResource("3_settings")]
+layout_mode = 1
+
+[node name="BanListPanel" parent="." instance=ExtResource("7_ban_list")]
 layout_mode = 1
 
 [node name="LevelSpawner" type="MultiplayerSpawner" parent="."]

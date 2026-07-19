@@ -38,9 +38,21 @@ func _on_kick_pressed():
 	# A translation KEY, not resolved text — the kicked player's client resolves
 	# it in THEIR OWN locale (see NetworkManager._send_kicked), since sending
 	# already-translated text would show it in the kicker's language instead.
-	if _selected_peer_id != -1:
+	if _selected_peer_id == -1:
+		return
+	if multiplayer.is_server():
+		# Can't rpc_id(1, ...) targeting ourselves — Godot refuses a "call_remote"
+		# RPC aimed at your own peer id outright. Only the host ever reaches this
+		# branch today (see set_selected_peer's can_moderate gate); a non-host
+		# admin would fall through to the RPC below instead.
+		NetworkManager.kick_peer(_selected_peer_id, "KICK_REASON_REMOVED", multiplayer.get_unique_id())
+	else:
 		NetworkManager._request_kick.rpc_id(1, _selected_peer_id, "KICK_REASON_REMOVED")
 
 func _on_ban_pressed():
-	if _selected_peer_id != -1:
+	if _selected_peer_id == -1:
+		return
+	if multiplayer.is_server():
+		NetworkManager.ban_peer(_selected_peer_id, "KICK_REASON_BANNED", multiplayer.get_unique_id())
+	else:
 		NetworkManager._request_ban.rpc_id(1, _selected_peer_id, "KICK_REASON_BANNED")

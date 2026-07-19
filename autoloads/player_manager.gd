@@ -44,6 +44,19 @@ func host_setup():
 	_uuid_to_peer[client_uuid] = 1
 	EventBus.player_data_updated.emit(1)
 
+## Called by NetworkManager.host_game()/join_game() right before a fresh session
+## starts. Needed because nothing ever erases YOUR OWN entry when you leave —
+## multiplayer.peer_disconnected only fires for OTHER peers relative to
+## yourself, never for your own id — so without this, your old entry lingers
+## forever and shows up as an unlabeled duplicate "you" the next time you host
+## or join. Reconnect (client_hello's own branch) intentionally does NOT call
+## this — that path is about restoring an existing identity, not starting over.
+func reset_session_state():
+	players.clear()
+	_uuid_to_peer.clear()
+	_peer_to_uuid.clear()
+	_recent_departures.clear()
+
 func _on_peer_disconnected(id: int):
 	if multiplayer.is_server() and _peer_to_uuid.has(id):
 		var uuid: String = _peer_to_uuid[id]
@@ -91,22 +104,17 @@ func client_hello(client_version: int, uuid: String, profile: Dictionary):
 		profile = departure["profile"]
 		reconnected_from_peer = departure["peer_id"]
 		_recent_departures.erase(uuid)
+		# Still re-check for a name collision against whoever's currently
+		# connected: a graceful disconnect_peer() takes a moment to fully clear
+		# the old peer, and if a fast rejoin ever lands before that clears (or a
+		# new player claimed the freed-up name in the meantime), restoring the
+		# old name verbatim would create a duplicate instead of just re-suffixing.
+		_dedupe_name(profile)
 	else:
 		# Fresh join: sanitize + de-duplicate the name as before.
 		if not profile.has("name") or profile["name"].is_empty():
 			profile["name"] = "Player " + str(sender)
-		var base_name = profile["name"]
-		var suffix = 1
-		var name_exists = true
-		while name_exists:
-			name_exists = false
-			for p_id in players:
-				if players[p_id].has("name") and players[p_id]["name"] == profile["name"]:
-					name_exists = true
-					break
-			if name_exists:
-				suffix += 1
-				profile["name"] = base_name + " " + str(suffix)
+		_dedupe_name(profile)
 
 	players[sender] = profile
 	_uuid_to_peer[uuid] = sender
@@ -126,6 +134,24 @@ func client_hello(client_version: int, uuid: String, profile: Dictionary):
 		# new_id, so peer_id-keyed local state (VOIP mute/volume, UI selection,
 		# ready status) gets migrated instead of silently orphaned.
 		_broadcast_identity_migration.rpc(reconnected_from_peer, sender)
+
+## Appends " N" to profile["name"] (in place) until it no longer collides with
+## any name currently in `players`. No-op if it's already unique — this is what
+## keeps a normal reconnect's restored name untouched while still catching the
+## rare case where that name got claimed by someone else in the meantime.
+func _dedupe_name(profile: Dictionary):
+	var base_name = profile["name"]
+	var suffix = 1
+	var name_exists = true
+	while name_exists:
+		name_exists = false
+		for p_id in players:
+			if players[p_id].has("name") and players[p_id]["name"] == profile["name"]:
+				name_exists = true
+				break
+		if name_exists:
+			suffix += 1
+			profile["name"] = base_name + " " + str(suffix)
 
 @rpc("authority", "call_local", "reliable")
 func update_profile(id: int, profile: Dictionary):

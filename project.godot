@@ -29,9 +29,11 @@ driver/mix_rate=48000
 EventBus="*res://autoloads/event_bus.gd"
 PlayerManager="*res://autoloads/player_manager.gd"
 NetworkManager="*res://autoloads/network_manager.gd"
+ChatNetwork="*res://autoloads/chat_network.gd"
 VoipNetwork="*res://autoloads/voip_network.gd"
 SettingsManager="*res://autoloads/settings_manager.gd"
 Localization="*res://autoloads/localization.gd"
+ServerConsole="*res://autoloads/server_console.gd"
 
 [input]
 
