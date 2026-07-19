@@ -1,0 +1,66 @@
+[gd_scene format=3 uid="uid://browser01"]
+
+[ext_resource type="Script" uid="uid://k226ci57mc3f" path="res://scenes/server_browser.gd" id="1_script"]
+
+[node name="ServerBrowser" type="Control" unique_id=612384192 node_paths=PackedStringArray("server_list", "refresh_btn", "direct_ip", "join_btn", "create_btn", "exit_btn")]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+server_list = NodePath("VBoxContainer/ServerList")
+refresh_btn = NodePath("VBoxContainer/HBoxContainer/RefreshButton")
+direct_ip = NodePath("VBoxContainer/HBoxContainer/DirectIP")
+join_btn = NodePath("VBoxContainer/HBoxContainer/JoinButton")
+create_btn = NodePath("VBoxContainer/CreateButton")
+exit_btn = NodePath("VBoxContainer/ExitButton")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="." unique_id=969912323]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -150.0
+offset_right = 200.0
+offset_bottom = 150.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Label" type="Label" parent="VBoxContainer" unique_id=1863870353]
+layout_mode = 2
+text = "BROWSER_TITLE"
+horizontal_alignment = 1
+
+[node name="ServerList" type="ItemList" parent="VBoxContainer" unique_id=1992856456]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer" unique_id=910898579]
+layout_mode = 2
+
+[node name="RefreshButton" type="Button" parent="VBoxContainer/HBoxContainer" unique_id=703138362]
+layout_mode = 2
+text = "BROWSER_REFRESH"
+
+[node name="DirectIP" type="LineEdit" parent="VBoxContainer/HBoxContainer" unique_id=250935829]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "127.0.0.1"
+placeholder_text = "BROWSER_DIRECT_IP_PLACEHOLDER"
+
+[node name="JoinButton" type="Button" parent="VBoxContainer/HBoxContainer" unique_id=1453245621]
+layout_mode = 2
+text = "BROWSER_JOIN"
+
+[node name="CreateButton" type="Button" parent="VBoxContainer" unique_id=202747473]
+layout_mode = 2
+text = "BROWSER_CREATE"
+
+[node name="ExitButton" type="Button" parent="VBoxContainer" unique_id=1437201636]
+layout_mode = 2
+text = "BROWSER_BACK"

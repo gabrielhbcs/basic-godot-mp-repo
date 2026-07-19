@@ -1,0 +1,32 @@
+[gd_scene format=3 uid="uid://bnx37jp4cxpf8"]
+
+[ext_resource type="Script" uid="uid://tqa60dil6old" path="res://scenes/player.gd" id="1_script"]
+[ext_resource type="Texture2D" uid="uid://bvbboc7jgacoy" path="res://assets/slime-sprite-sheet.png" id="2_slime"]
+[ext_resource type="Script" path="res://voip/voip_speaker.gd" id="3_voice"]
+[ext_resource type="Script" path="res://netcode/rollback_controller.gd" id="4_rollback"]
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_server"]
+properties/0/path = NodePath(".:sync_position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+
+[node name="Player" type="CharacterBody2D" unique_id=1213365817]
+script = ExtResource("1_script")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=62936888]
+texture_filter = 1
+scale = Vector2(2, 2)
+texture = ExtResource("2_slime")
+hframes = 8
+vframes = 2
+
+[node name="RollbackController" type="Node" parent="." unique_id=3849201177]
+script = ExtResource("4_rollback")
+
+[node name="VoicePlayer" type="AudioStreamPlayer2D" parent="." unique_id=1629590522]
+
+[node name="VoipSpeaker" type="Node" parent="VoicePlayer" unique_id=1292358367]
+script = ExtResource("3_voice")
+
+[node name="ServerSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=1107675395]
+replication_config = SubResource("SceneReplicationConfig_server")

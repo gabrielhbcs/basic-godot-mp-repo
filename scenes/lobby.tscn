@@ -1,0 +1,133 @@
+[gd_scene format=3 uid="uid://ret01ifycswo"]
+[ext_resource type="Script" path="res://scenes/lobby.gd" id="1_abcde"]
+[ext_resource type="PackedScene" uid="uid://chat01" path="res://scenes/chat_ui.tscn" id="2_chat"]
+[ext_resource type="PackedScene" uid="uid://cbx4uhnklipjg" path="res://scenes/settings_menu.tscn" id="3_settings"]
+[ext_resource type="Script" path="res://scenes/voice_panel.gd" id="4_voice_panel"]
+[ext_resource type="Script" path="res://scenes/admin_panel.gd" id="5_admin_panel"]
+[ext_resource type="Script" path="res://session/match_state.gd" id="6_match_state"]
+
+[node name="Lobby" type="Control" node_paths=PackedStringArray("status_label", "mic_button", "mic_volume_bar", "player_list", "voice_panel", "admin_panel", "match_state", "ready_button", "leave_button", "settings_button", "settings_menu", "lobby_ui", "game_container", "level_spawner")]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_abcde")
+status_label = NodePath("VBoxContainer/StatusLabel")
+mic_button = NodePath("VBoxContainer/MicButton")
+mic_volume_bar = NodePath("VBoxContainer/MicVolumeBar")
+player_list = NodePath("VBoxContainer/PlayerList")
+voice_panel = NodePath("VBoxContainer/PeerVoiceControls")
+admin_panel = NodePath("VBoxContainer/AdminControls")
+match_state = NodePath("MatchState")
+ready_button = NodePath("VBoxContainer/ReadyButton")
+leave_button = NodePath("VBoxContainer/LeaveButton")
+settings_button = NodePath("VBoxContainer/SettingsButton")
+settings_menu = NodePath("SettingsMenu")
+lobby_ui = NodePath("VBoxContainer")
+game_container = NodePath("GameLevelContainer")
+level_spawner = NodePath("LevelSpawner")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -150.0
+offset_top = -200.0
+offset_right = 150.0
+offset_bottom = 200.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Title" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+text = "LOBBY_TITLE"
+horizontal_alignment = 1
+
+[node name="StatusLabel" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+text = "STATUS_CONNECTED"
+horizontal_alignment = 1
+
+[node name="MicButton" type="CheckButton" parent="VBoxContainer"]
+layout_mode = 2
+text = "MIC_TOGGLE"
+button_pressed = true
+
+[node name="MicVolumeBar" type="ProgressBar" parent="VBoxContainer"]
+layout_mode = 2
+max_value = 0.5
+step = 0.001
+show_percentage = false
+custom_minimum_size = Vector2(0, 10)
+
+[node name="PlayerList" type="ItemList" parent="VBoxContainer"]
+custom_minimum_size = Vector2(0, 150)
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="PeerVoiceControls" type="HBoxContainer" parent="VBoxContainer" node_paths=PackedStringArray("mute_button", "volume_slider")]
+layout_mode = 2
+script = ExtResource("4_voice_panel")
+mute_button = NodePath("PeerMuteButton")
+volume_slider = NodePath("PeerVolumeSlider")
+
+[node name="PeerMuteButton" type="CheckButton" parent="VBoxContainer/PeerVoiceControls"]
+layout_mode = 2
+disabled = true
+text = "PEER_MUTE_SELECTED"
+
+[node name="PeerVolumeSlider" type="HSlider" parent="VBoxContainer/PeerVoiceControls"]
+layout_mode = 2
+size_flags_horizontal = 3
+editable = false
+min_value = -24.0
+max_value = 12.0
+step = 1.0
+value = 0.0
+
+[node name="AdminControls" type="HBoxContainer" parent="VBoxContainer" node_paths=PackedStringArray("kick_button", "ban_button")]
+layout_mode = 2
+script = ExtResource("5_admin_panel")
+kick_button = NodePath("KickButton")
+ban_button = NodePath("BanButton")
+
+[node name="KickButton" type="Button" parent="VBoxContainer/AdminControls"]
+layout_mode = 2
+disabled = true
+text = "KICK_SELECTED"
+
+[node name="BanButton" type="Button" parent="VBoxContainer/AdminControls"]
+layout_mode = 2
+disabled = true
+text = "BAN_SELECTED"
+
+[node name="ChatUI" parent="VBoxContainer" instance=ExtResource("2_chat")]
+layout_mode = 2
+
+[node name="ReadyButton" type="Button" parent="VBoxContainer"]
+layout_mode = 2
+text = "READY_UP"
+
+[node name="LeaveButton" type="Button" parent="VBoxContainer"]
+layout_mode = 2
+text = "LEAVE_ROOM"
+
+[node name="SettingsButton" type="Button" parent="VBoxContainer"]
+layout_mode = 2
+text = "SETTINGS_BUTTON"
+
+[node name="GameLevelContainer" type="Node" parent="."]
+
+[node name="MatchState" type="Node" parent="."]
+script = ExtResource("6_match_state")
+
+[node name="SettingsMenu" parent="." instance=ExtResource("3_settings")]
+layout_mode = 1
+
+[node name="LevelSpawner" type="MultiplayerSpawner" parent="."]
+spawn_path = NodePath("../GameLevelContainer")

@@ -1,0 +1,27 @@
+[gd_scene format=3 uid="uid://cafnm0a7em33i"]
+
+[ext_resource type="Script" uid="uid://bbjvrwpklkne8" path="res://scenes/game.gd" id="1_game"]
+[ext_resource type="PackedScene" path="res://scenes/game_camera.tscn" id="2_camera"]
+
+[node name="Game" type="Node2D" unique_id=541284233]
+script = ExtResource("1_game")
+
+[node name="BackgroundColor" type="ColorRect" parent="." unique_id=350880735]
+offset_right = 1152.0
+offset_bottom = 648.0
+color = Color(0.1, 0.1, 0.1, 1)
+
+[node name="GameCamera" parent="." instance=ExtResource("2_camera")]
+
+[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=2030397908]
+
+[node name="EndMatchButton" type="Button" parent="CanvasLayer" unique_id=1701314211]
+offset_left = 20.0
+offset_top = 40.0
+text = "END_MATCH"
+
+[node name="Players" type="Node2D" parent="." unique_id=841067356]
+
+[node name="PlayerSpawner" type="MultiplayerSpawner" parent="." unique_id=1098560372]
+_spawnable_scenes = PackedStringArray("uid://player01")
+spawn_path = NodePath("../Players")

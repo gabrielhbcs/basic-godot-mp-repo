@@ -1,0 +1,37 @@
+# Godot 4+ specific ignores
+.godot/
+.import/
+export.cfg
+*.translation
+
+# Build/export output — regenerable via Project > Export, shouldn't be tracked.
+# export_presets.cfg itself IS tracked (it's harmless boilerplate showing a
+# working export config for whoever clones this), only its *output* isn't.
+/basic-mp.exe
+/basic-mp.console.exe
+*.pck
+*.zip
+*.dmg
+*.apk
+*.aab
+
+# Locked-file rename artifacts (e.g. Godot renaming a DLL to "~name.dll"
+# because it couldn't overwrite the original while the editor held it open).
+**/~*
+
+# OS cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor-local settings (personal, not for the team/repo)
+.vscode/
+.idea/
+
+# Internal planning/session logs — genuinely useful while actively working on
+# THIS codebase, but not meant for whoever clones this as a game template; see
+# docs/ for the actual, current, maintained documentation instead.
+/plan-*.md
+
+# Claude Code local settings (personal, not for the team)
+/.claude/settings.local.json
