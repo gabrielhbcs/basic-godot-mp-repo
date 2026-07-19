@@ -85,3 +85,17 @@ To run and test connection logs:
     `user://server_admins.cfg` — see `NetworkManager.admin_uuids`'s doc comment. There's currently no
     in-Lobby UI for a non-host admin to use this (see [known-limitations.md](docs/known-limitations.md));
     moderate by editing `bans.cfg`/`server_admins.cfg` directly, or via a future server console.
+
+---
+
+## 🤝 Want to Contribute?
+
+This project's whole reason for existing is to stay a **decoupled base template** — something you can drop into a new game and only touch the pieces relevant to that game, without one subsystem dragging three others along with it. That constraint matters more here than in a typical game project, so before opening a PR, keep a few things in mind:
+
+*   **Decoupling is the point, not a nice-to-have.** VOIP doesn't know what a "player" is; the rollback netcode doesn't know what "input" means; the camera doesn't know about networking; the event bus doesn't know about game logic. If your change makes one system reach into another's internals to work, that's a sign it needs a callback, signal, or config value instead — not a sign the decoupling is being too strict.
+*   **Prefer callbacks/signals/Resources over hard references.** Look at how [rollback_controller.gd](netcode/rollback_controller.gd) takes `gather_input`/`apply_input`/`sanitize_input` as injected callables, or how [voip_network.gd](autoloads/voip_network.gd) exposes a `voice_relevance` callback instead of knowing about positions itself — that's the pattern to follow for new features.
+*   **Fail safe, not silent.** Optional integrations (e.g. `EventBus` presence checks in VOIP/PlayerManager) should degrade gracefully if a project doesn't have that autoload, rather than assuming it's always there.
+*   **Small, focused PRs.** Since the goal is reusability, a PR that bundles an unrelated refactor with a feature is harder to evaluate for "does this leak coupling somewhere."
+*   Check [known-limitations.md](docs/known-limitations.md) first — your idea might already be a documented, deliberate gap rather than an oversight.
+
+Bug reports, docs fixes, and translations (drop a new `.json` in [localization/locales/](localization/locales/)) are welcome with much less ceremony than the above — that guidance is mainly for anything touching core architecture.
