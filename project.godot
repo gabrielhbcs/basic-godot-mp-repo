@@ -27,6 +27,7 @@ driver/mix_rate=48000
 [autoload]
 
 EventBus="*res://autoloads/event_bus.gd"
+SystemAlertModal="*res://scenes/system_alert_modal.tscn"
 PlayerManager="*res://autoloads/player_manager.gd"
 NetworkManager="*res://autoloads/network_manager.gd"
 ChatNetwork="*res://autoloads/chat_network.gd"

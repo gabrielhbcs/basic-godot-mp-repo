@@ -66,7 +66,11 @@ func _unhandled_input(event: InputEvent):
 ## sees a proper disconnect rather than a timeout.
 func _on_quit_pressed():
 	if multiplayer.has_multiplayer_peer() and not multiplayer.multiplayer_peer is OfflineMultiplayerPeer:
-		NetworkManager.leave_game()
+		# Awaited: leave_game() briefly delays its own return (as host) to let
+		# clients receive the "host left" notice before the socket closes —
+		# quitting immediately after firing it, instead of waiting, would race
+		# that notice out from under it.
+		await NetworkManager.leave_game()
 	get_tree().quit()
 
 # --- Audio ---------------------------------------------------------------------

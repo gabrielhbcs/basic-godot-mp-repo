@@ -157,6 +157,21 @@ func _on_connection_failed():
 	# _on_connection_state_changed); we only leave once it gives up (state FAILED).
 
 func _on_server_disconnected():
+	# Modal, not just chat: this can be a total surprise (host crashed, force-
+	# quit, network drop) — a line buried in the chat log is easy to miss
+	# entirely. NetworkManager._maybe_reconnect() is already retrying with a
+	# bounded backoff (MAX_RECONNECT_ATTEMPTS) by the time this fires; the
+	# modal is dismissed automatically if that succeeds (see
+	# EventBus.system_alert_clear, emitted on RECONNECTING -> CONNECTED), or
+	# followed by the "could not reconnect" alert if it doesn't — see
+	# _on_connection_state_changed's FAILED branch below.
+	#
+	# Skipped if kicked/banned/host-left already explained this disconnect
+	# with its own specific alert — we're not actually about to retry in that
+	# case (has_explained_failure() short-circuits _maybe_reconnect() straight
+	# to FAILED), so "attempting to reconnect" would be an outright lie.
+	if not NetworkManager.has_explained_failure():
+		EventBus.system_alert.emit(tr("MSG_RECONNECTING"))
 	EventBus.system_message_received.emit("\n[color=red][i]" + tr("MSG_RECONNECTING") + "[/i][/color]")
 	# Same: navigation is driven by connection_state_changed reaching FAILED.
 
@@ -179,6 +194,12 @@ func _on_connection_state_changed(new_state: int):
 			NetworkManager.ConnectionState.DISCONNECTED:
 				status_label.text = tr("STATUS_DISCONNECTED")
 	if new_state == NetworkManager.ConnectionState.FAILED:
+		# Modal, not just chat: the scene change on the next line would destroy
+		# the chat log this message was just posted to before it could be read.
+		# Skipped if kick/ban/rejection/host-left already explained the FAILED
+		# state with its own more specific alert — see has_explained_failure().
+		if not NetworkManager.has_explained_failure():
+			EventBus.system_alert.emit(tr("MSG_RECONNECT_FAILED"))
 		EventBus.system_message_received.emit("\n[color=red][i]" + tr("MSG_RECONNECT_FAILED") + "[/i][/color]")
 		get_tree().change_scene_to_file("res://scenes/server_browser.tscn")
 

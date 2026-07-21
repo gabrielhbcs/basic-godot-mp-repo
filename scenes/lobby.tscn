@@ -6,6 +6,7 @@
 [ext_resource type="Script" path="res://scenes/admin_panel.gd" id="5_admin_panel"]
 [ext_resource type="Script" path="res://session/match_state.gd" id="6_match_state"]
 [ext_resource type="PackedScene" uid="uid://dwd7itrswt5bf" path="res://scenes/ban_list_panel.tscn" id="7_ban_list"]
+[ext_resource type="PackedScene" uid="uid://bping0label1" path="res://scenes/ping_label.tscn" id="8_ping_label"]
 
 [node name="Lobby" type="Control" node_paths=PackedStringArray("status_label", "mic_button", "mic_volume_bar", "player_list", "voice_panel", "admin_panel", "manage_bans_button", "ban_list_panel", "match_state", "ready_button", "leave_button", "settings_button", "settings_menu", "lobby_ui", "game_container", "level_spawner")]
 layout_mode = 3
@@ -142,3 +143,5 @@ layout_mode = 1
 
 [node name="LevelSpawner" type="MultiplayerSpawner" parent="."]
 spawn_path = NodePath("../GameLevelContainer")
+
+[node name="PingHud" parent="." instance=ExtResource("8_ping_label")]

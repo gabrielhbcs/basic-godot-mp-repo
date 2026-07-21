@@ -1,0 +1,14 @@
+[gd_scene load_steps=2 format=3 uid="uid://bping0label1"]
+
+[ext_resource type="Script" path="res://scenes/ping_label.gd" id="1_script"]
+
+[node name="PingHud" type="CanvasLayer"]
+layer = 100
+
+[node name="PingLabel" type="Label" parent="."]
+offset_left = 10.0
+offset_top = 10.0
+offset_right = 110.0
+offset_bottom = 33.0
+theme_override_colors/font_color = Color(1, 1, 0, 1)
+script = ExtResource("1_script")

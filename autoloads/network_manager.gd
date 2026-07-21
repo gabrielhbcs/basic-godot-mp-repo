@@ -33,8 +33,12 @@ var udp_broadcaster := PacketPeerUDP.new()
 var broadcast_timer: Timer
 var _host_display_name: String = "Dedicated Server"
 
+## Re-exposed for UI (e.g. a HUD ping label) — same pattern as VoipNetwork's
+## mute_changed/transmitting_changed. This file only measures the round trip;
+## it never builds or touches a Control itself.
+signal ping_updated(ms: int)
+
 var current_ping: int = 0
-var ping_label: Label
 var ping_timer: Timer
 
 var _last_join_address: String = DEFAULT_SERVER_IP
@@ -50,6 +54,11 @@ var _rejected_by_server: bool = false
 ## Set when the server kicks/bans us. Same reasoning as _rejected_by_server:
 ## auto-reconnecting after a kick would defeat the point of kicking someone.
 var _kicked_by_server: bool = false
+## Set when the host deliberately leaves (see NetworkManager.leave_game's
+## _send_host_left broadcast). Same reasoning as _rejected_by_server/
+## _kicked_by_server: the server isn't coming back, so retrying is pointless —
+## skip straight to FAILED instead of burning through the whole backoff.
+var _host_left_deliberately: bool = false
 
 ## Server only: peer_id -> deadline (Time.get_ticks_msec()) for completing the
 ## version/identity handshake (PlayerManager.client_hello). A peer that never
@@ -93,15 +102,6 @@ func _ready() -> void:
 	multiplayer.connected_to_server.connect(_on_connected_ok)
 	multiplayer.connection_failed.connect(_on_connected_fail)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
-
-	# Setup Ping UI
-	var canvas = CanvasLayer.new()
-	canvas.layer = 100 # Ensure it's always on top
-	ping_label = Label.new()
-	ping_label.position = Vector2(10, 10)
-	ping_label.add_theme_color_override("font_color", Color.YELLOW)
-	canvas.add_child(ping_label)
-	add_child(canvas)
 
 	# Setup Ping Timer
 	ping_timer = Timer.new()
@@ -147,23 +147,17 @@ func is_connected_to_session() -> bool:
 func get_local_peer_id() -> int:
 	return multiplayer.get_unique_id() if is_connected_to_session() else -1
 
+## True once the current FAILED state already has a specific, user-facing
+## reason behind it (kicked, banned, rejected, or the host left deliberately)
+## — i.e. an EventBus.system_alert already went out explaining why. Callers
+## reacting to a FAILED state (e.g. Lobby's own "could not reconnect" alert)
+## should check this first so the player isn't shown two modals back to back
+## for the same disconnect.
+func has_explained_failure() -> bool:
+	return _rejected_by_server or _kicked_by_server or _host_left_deliberately
+
 func _process(_delta):
 	var connected := is_connected_to_session()
-
-	if connected:
-		# Explicit tr() here, not a bare key assignment: the interpolated result
-		# ("Ping: 42ms") can never match a translation key itself, so Control's
-		# own auto-translate-on-assignment would silently do nothing — only the
-		# STATIC part of a string can be a bare key, anything with a runtime value
-		# baked in has to be resolved with tr() before assignment.
-		if multiplayer.get_unique_id() == 1:
-			ping_label.text = tr("PING_HOST")
-		elif current_ping > 0:
-			ping_label.text = tr("PING_FORMAT") % current_ping
-		else:
-			ping_label.text = ""
-	else:
-		ping_label.text = ""
 
 	if connected and multiplayer.is_server() and not _pending_handshake.is_empty():
 		_check_handshake_timeouts()
@@ -171,6 +165,11 @@ func _process(_delta):
 func _set_state(new_state: ConnectionState):
 	if state == new_state:
 		return
+	# Caught here, not at the RECONNECTING->CONNECTED transition's two call
+	# sites (_send_handshake_accepted / host's own path never reconnects) —
+	# one place is enough since state is the only thing both paths agree on.
+	if state == ConnectionState.RECONNECTING and new_state == ConnectionState.CONNECTED:
+		EventBus.system_alert_clear.emit()
 	state = new_state
 	EventBus.connection_state_changed.emit(state)
 
@@ -189,6 +188,7 @@ func _ping_request(client_time: int):
 @rpc("authority", "call_remote")
 func _ping_response(client_time: int):
 	current_ping = Time.get_ticks_msec() - client_time
+	ping_updated.emit(current_ping)
 
 func host_game(port: int = DEFAULT_PORT, host_name: String = "Server") -> bool:
 	print("Starting Server")
@@ -232,6 +232,7 @@ func join_game(address: String = DEFAULT_SERVER_IP, port: int = DEFAULT_PORT) ->
 	_user_initiated_disconnect = false
 	_rejected_by_server = false
 	_kicked_by_server = false
+	_host_left_deliberately = false
 	return _connect_to(address, port, ConnectionState.CONNECTING)
 
 func _connect_to(address: String, port: int, entering_state: ConnectionState) -> bool:
@@ -251,11 +252,32 @@ func leave_game() -> void:
 	if is_instance_valid(broadcast_timer):
 		broadcast_timer.queue_free()
 
+	if is_connected_to_session() and multiplayer.is_server():
+		# The host leaving takes the whole session down with it — tell every
+		# connected client this is deliberate before the socket closes, so they
+		# head straight back to the server browser instead of burning through
+		# NetworkManager's reconnect backoff against a server that isn't coming
+		# back. Same 0.3s-before-close reasoning as kick_peer()'s
+		# _send_kicked/disconnect_peer pair: give the reliable RPC a moment to
+		# actually reach clients first.
+		_send_host_left.rpc()
+		await get_tree().create_timer(0.3).timeout
+
 	if multiplayer_peer.get_connection_status() != MultiplayerPeer.CONNECTION_DISCONNECTED:
 		multiplayer_peer.close()
 	multiplayer.multiplayer_peer = null
 	state = ConnectionState.DISCONNECTED
 	print("Left the game")
+
+## Broadcast-only (no call_local — the host itself is leaving, it doesn't need
+## its own notice), so this only ever runs on the clients.
+@rpc("authority", "call_remote", "reliable")
+func _send_host_left():
+	_host_left_deliberately = true
+	EventBus.system_alert.emit(tr("MSG_HOST_LEFT"))
+	# The transport disconnect (server_disconnected) follows shortly after this;
+	# _maybe_reconnect() will see _host_left_deliberately and skip straight to
+	# FAILED instead of retrying against a server that's gone for good.
 
 # --- Handshake (version + identity) ------------------------------------------
 # The version/identity payload itself is owned by PlayerManager.client_hello(),
@@ -296,6 +318,12 @@ func _send_handshake_rejected(reason: String):
 	push_warning("NetworkManager: handshake rejected by server: ", reason)
 	_rejected_by_server = true
 	EventBus.connection_failed.emit()
+	# reason is a raw developer-facing diagnostic (protocol mismatch, banned,
+	# duplicate connection — see PlayerManager.client_hello), not a translation
+	# key, so it's shown as-is rather than through tr(). Goes through the modal,
+	# not chat: the scene changes away (server_browser/login) right after this,
+	# same reasoning as _send_kicked below.
+	EventBus.system_alert.emit(reason)
 	# The server disconnects us shortly after sending this — _maybe_reconnect()
 	# will see _rejected_by_server and skip straight to FAILED rather than retry.
 
@@ -332,9 +360,10 @@ func _maybe_reconnect():
 	if _user_initiated_disconnect:
 		state = ConnectionState.DISCONNECTED
 		return
-	if _rejected_by_server or _kicked_by_server:
-		# Retrying would just get rejected/kicked again for the same reason every time.
-		push_warning("NetworkManager: not retrying — server rejected or kicked us")
+	if _rejected_by_server or _kicked_by_server or _host_left_deliberately:
+		# Retrying would just get rejected/kicked again, or dial a server that's
+		# gone for good, every time.
+		push_warning("NetworkManager: not retrying — server rejected us, kicked us, or the host left")
 		state = ConnectionState.FAILED
 		return
 	if _reconnect_attempts >= MAX_RECONNECT_ATTEMPTS:
@@ -394,7 +423,7 @@ func kick_peer(peer_id: int, reason: String, requested_by: int) -> bool:
 ## Same as kick_peer, but also records the peer's identity so a future handshake
 ## from them is rejected outright. Neither uuid nor IP alone is a solid ban key —
 ## uuid is client-supplied and forgeable, IPs are shared and rotate — so both are
-## recorded and the limits accepted (see plan-features.md Phase 3).
+## recorded and the limits accepted (see docs/known-limitations.md).
 func ban_peer(peer_id: int, reason: String, requested_by: int) -> bool:
 	if not multiplayer.is_server():
 		return false
@@ -464,7 +493,13 @@ func _send_kicked(reason: String):
 	# reason is a translation KEY sent over the wire (see lobby.gd's kick/ban
 	# handlers), resolved HERE in the receiving client's own locale — sending
 	# pre-translated text would show it in the kicker's language instead.
-	EventBus.system_message_received.emit("\n[color=red][b]" + (tr("MSG_KICKED") % tr(reason)) + "[/b][/color]")
+	var message := tr("MSG_KICKED") % tr(reason)
+	# Modal, not just chat: Lobby is about to change scene back to
+	# server_browser (see Lobby._on_connection_state_changed), which would
+	# destroy the chat log this message just got posted to before the player
+	# has a chance to read it.
+	EventBus.system_alert.emit(message)
+	EventBus.system_message_received.emit("\n[color=red][b]" + message + "[/b][/color]")
 	# The server disconnects us shortly after sending this; _maybe_reconnect()
 	# will see _kicked_by_server and not try to rejoin.
 

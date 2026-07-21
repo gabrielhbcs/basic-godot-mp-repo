@@ -79,9 +79,9 @@ func apply_config():
 ## Split out of apply_config() deliberately: get_input_mix_rate() only reports the
 ## real device rate once the device is active, and apply_config() runs from _ready(),
 ## long before activation. Building the sampler with a wrong *source* rate does not
-## fail loudly — it silently pitch-shifts every packet (the chipmunk/slow-motion
-## artifact documented in plan-voip.md). So the rate is (re)read at activation, on
-## device switches, and whenever it changes underneath us.
+## fail loudly — it silently pitch-shifts every packet (a chipmunk/slow-motion
+## artifact). So the rate is (re)read at activation, on device switches, and
+## whenever it changes underneath us.
 func _rebuild_sampler():
 	if _encoder == null:
 		return
